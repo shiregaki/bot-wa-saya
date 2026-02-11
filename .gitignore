@@ -1,22 +1,18 @@
-# Dependency folders (sangat besar, tidak perlu diupload)
+# Folder library (sangat besar, biarkan Railway yang menginstalnya)
 node_modules/
 
-# WhatsApp Web Session Data (SANGAT PENTING)
-# Folder ini berisi kunci login Anda. Jika bocor, orang lain bisa membajak WA Anda.
-.wwebjs_auth/
-.wwebjs_cache/
+# Data Sesi Baileys (SANGAT PENTING!)
+# File di dalam folder ini adalah kunci akses ke WhatsApp Anda.
+# Jangan pernah diunggah ke GitHub publik.
+.baileys_auth/
 
-# Debug logs
+# Log sistem
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 
-# Environment variables (jika Anda menggunakan file .env untuk API Key)
-.env
-
-# MacOS system files
+# File sistem lokal
 .DS_Store
+Thumbs.db
 
-# Folder temporary untuk proses gambar/stiker (jika ada)
-temp/
-*.webp
+# Environment variables
+.env

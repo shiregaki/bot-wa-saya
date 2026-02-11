@@ -1,105 +1,93 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const { 
+    default: makeWASocket, 
+    useMultiFileAuthState, 
+    DisconnectReason, 
+    downloadContentFromMessage 
+} = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode-terminal');
 const sharp = require('sharp');
+const pino = require('pino');
 
-// Konfigurasi Tanpa Path Manual (Biarkan Puppeteer Download Sendiri)
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        handleSIGINT: false,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--no-zygote',
-            '--disable-gpu'
-        ],
-    }
-});
+async function startBot() {
+    // Menyimpan sesi agar tidak perlu scan ulang setiap restart
+    const { state, saveCreds } = await useMultiFileAuthState('.baileys_auth');
 
-// Menampilkan QR Code di Log Railway
-client.on('qr', (qr) => {
-    console.log('--- SCAN QR CODE DI LOGS RAILWAY ---');
-    qrcode.generate(qr, { small: true });
-});
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        logger: pino({ level: 'silent' }),
+        browser: ['Bot Stiker', 'MacOS', '3.0.0']
+    });
 
-client.on('ready', () => {
-    console.log('✅ Bot WhatsApp Berhasil Online di Railway!');
-});
+    // Simpan kredensial saat ada perubahan
+    sock.ev.on('creds.update', saveCreds);
 
-client.on('message', async (msg) => {
-    const chat = await msg.getChat();
-    const body = msg.body.toLowerCase();
-
-    // 1. FITUR STIKER (!s atau !stiker)
-    if (body === '!s' || body === '!stiker') {
-        // Cek apakah ada media atau mereply media
-        const hasMedia = msg.hasMedia || (msg.hasQuotedMsg && (await msg.getQuotedMessage()).hasMedia);
+    // Monitor Koneksi
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
         
-        if (hasMedia) {
-            const media = msg.hasMedia ? await msg.downloadMedia() : await (await msg.getQuotedMessage()).downloadMedia();
+        if (qr) {
+            console.log('--- SCAN QR CODE DI LOGS RAILWAY ---');
+            qrcode.generate(qr, { small: true });
+        }
 
-            if (media && media.mimetype.includes('image')) {
-                await chat.sendStateTyping();
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) startBot();
+        } else if (connection === 'open') {
+            console.log('✅ Bot Baileys Aktif!');
+        }
+    });
+
+    // Logika Pesan Masuk
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const m = messages[0];
+        if (!m.message || m.key.fromMe) return;
+
+        const from = m.key.remoteJid;
+        const type = Object.keys(m.message)[0];
+        
+        // Ambil teks pesan
+        const body = (type === 'conversation') ? m.message.conversation : 
+                     (type === 'extendedTextMessage') ? m.message.extendedTextMessage.text : 
+                     (type === 'imageMessage') ? m.message.imageMessage.caption : '';
+        const command = body.toLowerCase();
+
+        // FITUR STIKER (!s)
+        if (command === '!s' || command === '!stiker') {
+            const isImage = type === 'imageMessage' || (m.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage);
+            
+            if (isImage) {
+                const quotaContent = m.message.imageMessage || m.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage;
+                
+                // Download Media
+                const stream = await downloadContentFromMessage(quotaContent, 'image');
+                let buffer = Buffer.from([]);
+                for await (const chunk of stream) {
+                    buffer = Buffer.concat([buffer, chunk]);
+                }
+
                 try {
-                    const buffer = Buffer.from(media.data, 'base64');
-                    
-                    // Proses Gambar: Menjadi 512x512 WebP (Standar WhatsApp)
-                    const processedImage = await sharp(buffer)
-                        .resize(512, 512, {
-                            fit: 'contain',
-                            background: { r: 0, g: 0, b: 0, alpha: 0 }
-                        })
+                    const stickerBuffer = await sharp(buffer)
+                        .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
                         .webp()
                         .toBuffer();
 
-                    const sticker = new MessageMedia('image/webp', processedImage.toString('base64'), 'sticker.webp');
-                    
-                    await client.sendMessage(msg.from, sticker, {
-                        sendMediaAsSticker: true,
-                        stickerName: "Ultimate Sticker Bot",
-                        stickerAuthor: "Gemini AI"
-                    });
-                } catch (err) {
-                    console.error('Sharp Error:', err);
-                    msg.reply('❌ Gagal memproses gambar menjadi stiker.');
+                    await sock.sendMessage(from, { sticker: stickerBuffer });
+                } catch (e) {
+                    await sock.sendMessage(from, { text: '❌ Gagal membuat stiker.' });
                 }
             } else {
-                msg.reply('❌ Maaf, fitur ini hanya untuk gambar.');
+                await sock.sendMessage(from, { text: 'Balas atau kirim gambar dengan caption *!s*' });
             }
-        } else {
-            msg.reply('Balas atau kirim gambar dengan caption *!s* untuk membuat stiker.');
         }
-    }
 
-    // 2. FITUR PING
-    else if (body === 'ping') {
-        msg.reply('Pong! Bot aktif 24 jam 🤖');
-    }
+        // FITUR PING
+        else if (command === 'ping') {
+            await sock.sendMessage(from, { text: 'Pong! 🚀' });
+        }
+    });
+}
 
-    // 3. FITUR MENU
-    else if (body === '!menu') {
-        const menuText = `
-*--- ULTIMATE WA BOT ---*
-
-1. *!s* - Kirim/balas gambar jadi stiker
-2. *!jam* - Cek waktu server
-3. *ping* - Cek koneksi bot
-
-_Bot berjalan otomatis di Railway_
-        `;
-        msg.reply(menuText);
-    }
-
-    // 4. FITUR JAM (WIB)
-    else if (body === '!jam') {
-        const waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-        msg.reply(`Waktu saat ini (WIB): \n${waktu}`);
-    }
-});
-
-// Penanganan Error Tambahan agar Bot tidak sering restart
-client.on('auth_failure', msg => console.error('Gagal Autentikasi:', msg));
-client.on('disconnected', (reason) => console.log('Bot Terputus:', reason));
-
-client.initialize();
+startBot();
