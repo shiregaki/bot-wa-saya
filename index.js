@@ -15,7 +15,7 @@ async function startBot() {
 
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
+        printQRInTerminal: false, // Diubah ke false karena kita akan handle manual di bawah
         logger: pino({ level: 'silent' }),
         browser: ['Bot Stiker', 'MacOS', '3.0.0']
     });
@@ -24,12 +24,19 @@ async function startBot() {
     sock.ev.on('creds.update', saveCreds);
 
     // Monitor Koneksi
-    sock.ev.on('connection.update', (update) => {
+    // Monitor Koneksi
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
         if (qr) {
-            console.log('--- SCAN QR CODE DI LOGS RAILWAY ---');
-            qrcode.generate(qr, { small: true });
+            // Kita ubah QR menjadi string utuh agar tidak terpecah baris demi baris oleh log Railway
+            qrcode.toString(qr, { type: 'terminal', small: true }, (err, qrString) => {
+                if (err) return console.error('Gagal generate QR:', err);
+                
+                console.log('--- SCAN QR CODE DI BAWAH INI ---');
+                // Menggunakan process.stdout.write untuk memastikan string dicetak apa adanya
+                process.stdout.write(qrString + '\n');
+            });
         }
 
         if (connection === 'close') {
