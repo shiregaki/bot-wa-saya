@@ -1,12 +1,33 @@
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const sharp = require('sharp');
+const fs = require('fs'); // Menambahkan modul file system
+
+// Fungsi pintar untuk mencari lokasi Chrome di server Linux
+const getChromePath = () => {
+    const paths = [
+        process.env.PUPPETEER_EXECUTABLE_PATH, // Prioritas dari Environment Variable Railway
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/app/.apt/usr/bin/google-chrome' // Path cadangan untuk beberapa buildpack
+    ];
+
+    for (const path of paths) {
+        if (path && fs.existsSync(path)) {
+            console.log(`🚀 Menggunakan browser di: ${path}`);
+            return path;
+        }
+    }
+    console.log('⚠️ Warning: Tidak menemukan Chrome sistem, mencoba default Puppeteer...');
+    return undefined;
+};
 
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        // Menggunakan path Chrome dari Railway (jika ada), jika tidak gunakan default lokal
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        executablePath: getChromePath(),
         handleSIGINT: false,
         args: [
             '--no-sandbox',
@@ -71,6 +92,8 @@ client.on('message', async (msg) => {
             } else {
                 msg.reply('❌ Kirim atau balas gambar dengan !s');
             }
+        } else {
+            msg.reply('Balas atau kirim gambar dengan caption *!s*');
         }
     }
 
