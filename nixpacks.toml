@@ -1,11 +1,8 @@
 [phases.setup]
-# Menginstal Node.js, Google Chrome, dan library pendukung (libglib)
-nixPkgs = ["nodejs", "google-chrome", "glib"]
+nixPkgs = ["nodejs", "google-chrome", "glib", "nss", "atk"]
 
 [phases.build]
-# Memastikan library diinstal dengan benar sebelum dijalankan
 cmds = ["npm install"]
 
 [start]
-# Perintah untuk menjalankan bot
 cmd = "node index.js"

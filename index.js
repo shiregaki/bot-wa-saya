@@ -2,7 +2,7 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const sharp = require('sharp');
 
-// Inisialisasi tanpa memaksa path Chrome tertentu
+// Konfigurasi Tanpa Path Manual (Biarkan Puppeteer Download Sendiri)
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -17,30 +17,34 @@ const client = new Client({
     }
 });
 
+// Menampilkan QR Code di Log Railway
 client.on('qr', (qr) => {
-    console.log('--- SCAN QR CODE DI BAWAH INI ---');
+    console.log('--- SCAN QR CODE DI LOGS RAILWAY ---');
     qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
-    console.log('✅ Bot WhatsApp sudah aktif dan siap digunakan!');
+    console.log('✅ Bot WhatsApp Berhasil Online di Railway!');
 });
 
 client.on('message', async (msg) => {
     const chat = await msg.getChat();
     const body = msg.body.toLowerCase();
 
-    // FITUR STIKER (!s)
+    // 1. FITUR STIKER (!s atau !stiker)
     if (body === '!s' || body === '!stiker') {
-        if (msg.hasMedia || (msg.hasQuotedMsg && (await msg.getQuotedMessage()).hasMedia)) {
-            const media = msg.hasMedia ? 
-                await msg.downloadMedia() : 
-                await (await msg.getQuotedMessage()).downloadMedia();
+        // Cek apakah ada media atau mereply media
+        const hasMedia = msg.hasMedia || (msg.hasQuotedMsg && (await msg.getQuotedMessage()).hasMedia);
+        
+        if (hasMedia) {
+            const media = msg.hasMedia ? await msg.downloadMedia() : await (await msg.getQuotedMessage()).downloadMedia();
 
             if (media && media.mimetype.includes('image')) {
                 await chat.sendStateTyping();
                 try {
                     const buffer = Buffer.from(media.data, 'base64');
+                    
+                    // Proses Gambar: Menjadi 512x512 WebP (Standar WhatsApp)
                     const processedImage = await sharp(buffer)
                         .resize(512, 512, {
                             fit: 'contain',
@@ -53,28 +57,49 @@ client.on('message', async (msg) => {
                     
                     await client.sendMessage(msg.from, sticker, {
                         sendMediaAsSticker: true,
-                        stickerName: "Bot Stiker Saya",
-                        stickerAuthor: "Gemini Bot"
+                        stickerName: "Ultimate Sticker Bot",
+                        stickerAuthor: "Gemini AI"
                     });
                 } catch (err) {
-                    msg.reply('❌ Gagal membuat stiker.');
-                    console.error(err);
+                    console.error('Sharp Error:', err);
+                    msg.reply('❌ Gagal memproses gambar menjadi stiker.');
                 }
+            } else {
+                msg.reply('❌ Maaf, fitur ini hanya untuk gambar.');
             }
+        } else {
+            msg.reply('Balas atau kirim gambar dengan caption *!s* untuk membuat stiker.');
         }
     }
 
-    // MENU LAINNYA
+    // 2. FITUR PING
     else if (body === 'ping') {
-        msg.reply('Pong! 🤖');
+        msg.reply('Pong! Bot aktif 24 jam 🤖');
     }
+
+    // 3. FITUR MENU
     else if (body === '!menu') {
-        msg.reply('*MENU BOT*\n1. !s (Stiker)\n2. !jam\n3. ping');
+        const menuText = `
+*--- ULTIMATE WA BOT ---*
+
+1. *!s* - Kirim/balas gambar jadi stiker
+2. *!jam* - Cek waktu server
+3. *ping* - Cek koneksi bot
+
+_Bot berjalan otomatis di Railway_
+        `;
+        msg.reply(menuText);
     }
+
+    // 4. FITUR JAM (WIB)
     else if (body === '!jam') {
         const waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-        msg.reply(`Waktu server: ${waktu}`);
+        msg.reply(`Waktu saat ini (WIB): \n${waktu}`);
     }
 });
+
+// Penanganan Error Tambahan agar Bot tidak sering restart
+client.on('auth_failure', msg => console.error('Gagal Autentikasi:', msg));
+client.on('disconnected', (reason) => console.log('Bot Terputus:', reason));
 
 client.initialize();
