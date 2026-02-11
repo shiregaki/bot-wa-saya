@@ -13,8 +13,8 @@ async function startBot() {
     console.log('🚀 Memulai inisialisasi bot...');
 
     try {
-        // Menggunakan folder .baileys_auth untuk menyimpan sesi
-        const { state, saveCreds } = await useMultiFileAuthState('.baileys_auth');
+        // Menggunakan folder .baileys_session_v2 untuk menyimpan sesi
+        const { state, saveCreds } = await useMultiFileAuthState('.baileys_session_v2');
         console.log('✅ Folder sesi berhasil dimuat.');
 
         const sock = makeWASocket({
