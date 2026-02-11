@@ -29,7 +29,7 @@ async function startBot() {
     // --- LOGIKA PAIRING CODE (Hanya aktif jika belum login) ---
     if (!sock.authState.creds.registered) {
         console.log("--- MODUL PAIRING CODE AKTIF ---");
-        const phoneNumber = "6282353025691"; 
+        const phoneNumber = "6282353025691"; // Ganti dengan nomor WhatsApp Anda (format internasional tanpa +)
         setTimeout(async () => {
             let code = await sock.requestPairingCode(phoneNumber);
             console.log(`✅ KODE PAIRING ANDA: ${code}`);
